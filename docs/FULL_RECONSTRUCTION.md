@@ -4,7 +4,7 @@
 
 This document reconstructs the exploit chain as it exists in the live mirror under `live-site/`, with emphasis on showing how the chain actually works end to end instead of only annotating isolated RE fragments.
 
-The standalone published repo does not include that `live-site/` mirror or `EXPLOIT_CHAIN_WRITEUP.md`. References to those files are provenance notes from the original research workspace, not files available in this package.
+The standalone published repo does not include that `live-site/` mirror or `EXPLOIT_CHAIN_WRITEUP.md`. References to those files are provenance notes from the original research workspace, not files available in this package. Those private materials were used to corroborate the browser/PAC/native chain shape here, but are intentionally excluded from the publication to avoid redistributing the original chain.
 
 The reconstruction below is based on:
 
@@ -28,6 +28,8 @@ The coverage in this repo breaks down like this:
 - **iOS 17 browser path:** `cassowary` on `16.6–17.2.1`, then `seedbell_pre` plus the newer `seedbell` branch on `17.0–17.2.1`
 - **Shared native path:** `Stage3_VariantB.js`, `bootstrap.dylib`, the `0x50000` helper, records `0x80000` / `0x90000` / `0x90001`, and `0xF0000` sit after browser exploitation and are largely shared across the documented range
 
+Standalone-repo note: the omitted `live-site/` mirror and internal writeup carry much of the line-level provenance for the browser-stage material. The browser/PAC sections here were cross-checked against those private sources; the standalone publication simply does not re-ship them.
+
 The remaining implementation gap is the deeper per-version `0x90000` state/patch logic, so the repo documents the iOS 17 browser chain already but does not yet present a source-equivalent 17.x-specific native exploit implementation.
 
 ## End-To-End Shape
@@ -44,7 +46,7 @@ The live chain is:
 8. `TweakLoader.dylib` extracts its embedded `__TEXT,__SBTweak` Mach-O to `/tmp/actual.dylib`, patches dyld lib-validation, `dlopen`s the extracted Mach-O, and calls its exported `next_stage_main`.
 9. The embedded `__SBTweak` installs lockscreen/SpringBoard hooks and draws a visible “LOCKSCREEN COMPROMISED / PWNED” overlay.
 
-## Stage1: Exact Browser Primitive
+## Stage1: Reconstructed Browser Primitive
 
 Both Stage1 branches converge on the same caller-facing primitive. The main difference is how each browser bug corrupts JSC state before the final WASM-backed memory contract is installed.
 
@@ -112,7 +114,7 @@ Important anchors:
 - worker repair: `:965-1023`
 - final primitive install: `:1050-1083`
 
-## Stage2: Exact PAC Bypass
+## Stage2: Reconstructed PAC Bypass
 
 Stage2 is likewise split between an older and newer branch, but both routes still end at the same arm64e PAC-aware sign/auth/call surface.
 
@@ -256,11 +258,11 @@ It returns a single-byte environment verdict via the caller-supplied pointer.
 This is the JS/native downloader bridge:
 
 - waits on a semaphore
-- writes the primary request string at shared-buffer offset `+0x4`
-- optionally writes a secondary string at shared-buffer offset `+0x800000`
+- writes the primary request string at full-buffer offset `+0x4` (`bytes + 0x0` once the leading opcode dword is skipped)
+- optionally writes a secondary string at full-buffer offset `+0x800000` (`bytes + 0x7ffffc`)
 - flips the request opcode to `1` or `7`
 - busy-waits until JS answers with opcode `3` or `4`
-- on success, copies `size` from shared-buffer offset `+0x4` and payload bytes from `+0x8`
+- on success, copies `size` from full-buffer offset `+0x4` and payload bytes from `+0x8` (`bytes + 0x0` / `bytes + 0x4`)
 
 That matches `Stage3_VariantB.js:wA()` and `feedRawBuffer()` exactly.
 
@@ -442,7 +444,7 @@ Observed bootstrap contract from the live call sites:
 
 Observed live-use sequence in `bootstrap.dylib:sub_5FEC`:
 
-- `ctx + 0xF8` is called with record id `0x80000`, which routes `entry5_type0x09.dylib` bytes and length into the `0x50000` loader
+- `ctx + 0xF8` is called with record id `0x80000`, which routes the `0x80000` record bytes and length into the `0x50000` loader
 - `ctx + 0x108` is then called with record id `0x80000` to recover the loaded-image handle
 - `ctx + 0x38` is called with that handle and the string `"_start"` to resolve the orchestrator entrypoint
 - bootstrap calls the resolved `_start` directly with `x0 = ctx`
@@ -845,11 +847,11 @@ That makes the embedded payload a visible user-interface marker rather than a st
 
 To reproduce the native payload chain offline without the browser exploit:
 
-1. Rebuild a `0xF00DBEEF` payload container from `manifest.json`.
+1. Rebuild the Stage3 output blob from `manifest.json` (usually a `0xF00DBEEF` container, but some manifest entries are raw passthrough blobs).
 2. Extract `__TEXT,__SBTweak` from `TweakLoader.dylib`.
-3. Inspect exported symbols from the extracted Mach-O.
+3. Inspect exported symbols from the extracted Mach-O with standard external Mach-O tooling.
 
-The helper script added in `tools/coruna_payload_tool.py` supports this, but the examples below require the original `live-site/` mirror that is not included in this standalone repo.
+The helper script added in `tools/coruna_payload_tool.py` covers step 1, step 2, and small-record inspection. Export-symbol inspection in step 3 still relies on external tooling, and the examples below require the original `live-site/` mirror that is not included in this standalone repo.
 
 Examples:
 
@@ -888,12 +890,12 @@ python3 tools/coruna_payload_tool.py inspect-record \
 
 ## Current Secondary Questions
 
-The previously open `0x50000` and `prefix32` questions are resolved above. The remaining lower-priority unknowns are narrower:
+The previously open `0x50000` and `prefix32` questions are narrowed substantially above. The remaining lower-priority unknowns are narrower:
 
 - what native consumer ultimately interprets the forwarded `prefix32` sideband after Stage3 concatenates it into the generated payload buffer
 - whether later stages load any additional optional modules beyond the confirmed `0x50000 -> 0x80000 -> _start -> unload` cycle
 
-None of those change the main factual reconstruction:
+None of those currently change the main chain shape reconstructed here:
 
 - Stage1 gets JS R/W
 - Stage2 gets PAC-aware sign/auth/call

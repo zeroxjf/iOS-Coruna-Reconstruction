@@ -5,20 +5,21 @@ This directory is the start of a source-equivalent handoff tree.
 Current scope:
 
 - `include/coruna_contracts.h`
-  - recovered record IDs, including auxiliary `0x70001/03/04/05/06` and optional `0xA0000`
+  - recovered record IDs, including auxiliary `0x70003/04/05/06` and optional `0xA0000`
+  - bootstrap request IDs `0x70001/0x70002` for the selector path / opaque `prefix32` sideband
   - `0xF00DBEEF` container header and entry layout
   - `0x70000` selector blob layout
   - `0x70005` mode blob view with the enable bit at byte `+0x5` and TTL dword at `+0x8`
   - bootstrap callback slot offsets used by `0x50000`
   - `0x90000` and `0x90001` vtable object layouts
-  - helper command IDs observed on the live `0x90001` path
+  - raw helper command IDs observed on the live `0x90001` path
 - `src/coruna_contracts.c`
-  - validation helpers for the selector and mode blobs
+  - parsing and basic validation helpers for the selector and mode blobs
   - thin wrappers around the recovered `0x90000` and `0x90001` method tables
 - `include/coruna_stage_loader.h`
   - fixed-size stage slot layout consumed by the `0x80000` record-store builder
   - default mode TTL/state projection used by `_startr`
-  - exact `0x80000` thread-pack initialization contract
+  - recovered `0x80000` thread-pack subset used by the current worker-pack helpers
 - `src/coruna_stage_loader.c`
   - record-store dedup/conflict logic matching `sub_25020`
   - `0x70005` mode status projection with the live 86400-second default

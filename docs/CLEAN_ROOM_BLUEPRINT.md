@@ -192,6 +192,8 @@ Observed request/response behavior:
 
 The native side busy-waits for `opcode` to become `3` or `4`, then copies the 32-bit size from `bytes + 0x0` and payload bytes from `bytes + 0x4`.
 
+Those offsets are relative to `bytes[]`. The full shared buffer also has a leading 32-bit opcode field, so the equivalent whole-buffer offsets are `+0x4`, `+0x8`, and `+0x800000`.
+
 ## Small Record Formats
 
 ### Selector Blob (`entry6_type0x07.bin`)
@@ -336,7 +338,7 @@ The only fields used directly by `_startr` in the recovered path are the enable 
 
 ## Offline Reconstruction Workflow
 
-The helper script in `tools/coruna_payload_tool.py` is enough to reproduce the live container and inspect the small records if you also have the original `live-site/` mirror referenced below. That mirror is not included in this standalone repo:
+The helper script in `tools/coruna_payload_tool.py` is enough to reproduce the live Stage3 output blob, extract sections, and inspect the small records if you also have the original `live-site/` mirror referenced below. That mirror is not included in this standalone repo. Export-symbol inspection still relies on standard external Mach-O tooling.
 
 ```bash
 python3 tools/coruna_payload_tool.py build-container \

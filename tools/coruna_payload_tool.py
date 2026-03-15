@@ -168,7 +168,8 @@ def resolve_entry_path(
         rewritten = root / arch_dir / "TweakLoader.dylib"
         if not rewritten.exists():
             raise FileNotFoundError(
-                f"live Stage3 rewrite target does not exist: {rewritten}"
+                f"live Stage3 rewrite target does not exist: {rewritten} "
+                f"(pass --tweakloader-root in the standalone repo)"
             )
         return rewritten, True
 
@@ -181,7 +182,8 @@ def resolve_entry_path(
         arch_dir = "arm64e" if has_pac else "arm64"
         suggested = root / arch_dir / "TweakLoader.dylib"
         raise FileNotFoundError(
-            f"{candidate} missing; use --emulate-live-stage3 to rewrite to {suggested}"
+            f"{candidate} missing; use --emulate-live-stage3 to rewrite to {suggested} "
+            f"(or pass --tweakloader-root in the standalone repo)"
         )
 
     raise FileNotFoundError(f"payload file not found: {candidate}")
@@ -295,9 +297,11 @@ def cmd_build_container(args: argparse.Namespace) -> int:
         available = ", ".join(sorted(manifest.keys())[:10])
         raise SystemExit(f"hash {args.hash_name!r} not found in manifest; examples: {available}")
 
+    manifest_entries = manifest[args.hash_name]
+    raw_passthrough = len(manifest_entries) == 1 and manifest_entries[0].get("raw")
     tweakloader_root = pathlib.Path(args.tweakloader_root) if args.tweakloader_root else None
     container, resolved_entries = build_f00dbeef_container(
-        manifest[args.hash_name],
+        manifest_entries,
         payload_root / args.hash_name,
         emulate_live_stage3=args.emulate_live_stage3,
         has_pac=args.has_pac,
@@ -307,9 +311,10 @@ def cmd_build_container(args: argparse.Namespace) -> int:
     output_path = pathlib.Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_bytes(container)
+    output_kind = "raw blob" if raw_passthrough else "F00DBEEF container"
     print(
-        f"built container hash={args.hash_name} size={len(container)} "
-        f"entries={len(manifest[args.hash_name])} -> {output_path}"
+        f"built {output_kind} hash={args.hash_name} size={len(container)} "
+        f"entries={len(manifest_entries)} -> {output_path}"
     )
     for resolved in resolved_entries:
         notes = []
@@ -320,7 +325,7 @@ def cmd_build_container(args: argparse.Namespace) -> int:
             and resolved.manifest_size != resolved.actual_size
         ):
             notes.append(
-                f"manifest_size={resolved.manifest_size} actual_size={resolved.actual_size}"
+                f"WARNING manifest_size={resolved.manifest_size} actual_size={resolved.actual_size}"
             )
         note_text = f" [{' ; '.join(notes)}]" if notes else ""
         print(f"{resolved.manifest_file} -> {resolved.source_path}{note_text}")
@@ -355,17 +360,13 @@ def cmd_inspect_record(args: argparse.Namespace) -> int:
             selector_key = struct.unpack_from("<I", entry, 0)[0]
             opaque_prefix = entry[4:36]
             tail_name = decode_c_string(entry[36:])
-            if tail_name:
-                print(
-                    f"[{index}] selector_key={selector_key:#x} "
-                    f"prefix32={opaque_prefix.hex()} filename={tail_name!r}"
-                )
-            else:
-                relative_path = decode_c_string(entry[4:])
-                print(
-                    f"[{index}] selector_key={selector_key:#x} "
-                    f"relative_path={relative_path!r}"
-                )
+            note = ""
+            if not tail_name:
+                note = " [empty filename; prefix32 kept opaque]"
+            print(
+                f"[{index}] selector_key={selector_key:#x} "
+                f"prefix32={opaque_prefix.hex()} filename={tail_name!r}{note}"
+            )
             cursor += 100
         if cursor != len(blob):
             print(f"trailing_bytes={len(blob) - cursor}")
@@ -444,7 +445,10 @@ def build_parser() -> argparse.ArgumentParser:
     extract.add_argument("--arch", help="slice name for universal binaries, e.g. arm64e")
     extract.set_defaults(func=cmd_extract_section)
 
-    build = subparsers.add_parser("build-container", help="rebuild a F00DBEEF container")
+    build = subparsers.add_parser(
+        "build-container",
+        help="rebuild the Stage3 output blob (F00DBEEF container or raw passthrough)",
+    )
     build.add_argument("--manifest", required=True, help="path to payloads/manifest.json")
     build.add_argument("--payload-root", required=True, help="path to payloads directory")
     build.add_argument("--hash-name", required=True, help="hash directory from manifest")
@@ -461,7 +465,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     build.add_argument(
         "--tweakloader-root",
-        help="override the TweakLoader obj root, default: ../TweakLoader/.theos/obj relative to payload-root",
+        help="override the TweakLoader obj root; default matches the original unpublished workspace layout relative to payload-root",
     )
     build.add_argument(
         "--strict-manifest-sizes",

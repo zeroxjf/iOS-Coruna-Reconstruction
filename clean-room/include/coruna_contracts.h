@@ -26,7 +26,6 @@ enum coruna_status_code {
 enum coruna_record_id {
     CORUNA_RECORD_50000 = 0x50000,
     CORUNA_RECORD_70000 = 0x70000,
-    CORUNA_RECORD_70001 = 0x70001,
     CORUNA_RECORD_70003 = 0x70003,
     CORUNA_RECORD_70004 = 0x70004,
     CORUNA_RECORD_70005 = 0x70005,
@@ -38,11 +37,16 @@ enum coruna_record_id {
     CORUNA_RECORD_F0000 = 0xF0000,
 };
 
+enum coruna_bootstrap_request_id {
+    CORUNA_BOOTSTRAP_REQUEST_SELECTED_PATH = 0x70001u,
+    CORUNA_BOOTSTRAP_REQUEST_PREFIX32 = 0x70002u,
+};
+
 enum coruna90001_command {
     CORUNA90001_CMD_SELF_PREPARE = 13,
     CORUNA90001_CMD_TASK_PORT_PREPARE = 22,
     CORUNA90001_CMD_PMAP_BOUNDS = 38,
-    CORUNA90001_CMD_QUERY_STATE = 0x40000010u,
+    CORUNA90001_CMD_40000010 = 0x40000010u,
     CORUNA90001_CMD_STAGE_1B_SET = 0x4000001Bu,
     CORUNA90001_CMD_STAGE_1B_QUERY = 0xC000001Bu,
 };
@@ -119,6 +123,9 @@ struct coruna_mode_blob_view {
     uint32_t field_10;
     uint32_t field_14;
     uint32_t field_18;
+    uint32_t string_offset;
+    uint32_t string_length;
+    const char *payload_name;
 };
 
 struct coruna_kernel_version {
@@ -151,8 +158,9 @@ struct coruna90000_stage1b_request {
 };
 
 struct coruna90000_driver_object {
-    uint16_t abi_major;
-    uint16_t abi_minor;
+    /* Preserved leading halfwords; semantic meaning is not yet pinned down. */
+    uint16_t header_word_00;
+    uint16_t header_word_02;
     uint32_t reserved_04;
     uint64_t reserved_08;
     int64_t (*destroy)(struct coruna90000_driver_object *self);
@@ -186,8 +194,9 @@ struct coruna90000_driver_object {
 };
 
 struct coruna90001_driver_object {
-    uint16_t abi_major;
-    uint16_t abi_minor;
+    /* Preserved leading halfwords; semantic meaning is not yet pinned down. */
+    uint16_t header_word_00;
+    uint16_t header_word_02;
     uint32_t reserved_04;
     uint64_t reserved_08;
     int64_t (*destroy)(struct coruna90001_driver_object *self);

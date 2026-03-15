@@ -139,8 +139,33 @@ bool coruna_mode_blob_view_init(
     out_view->field_10 = words[4];
     out_view->field_14 = words[5];
     out_view->field_18 = 0;
+    out_view->string_offset = 0;
+    out_view->string_length = 0;
+    out_view->payload_name = NULL;
     if (byte_size >= 0x1c) {
         out_view->field_18 = words[6];
+    }
+    if (byte_size > 0x1c && byte_size < 0x24) {
+        return false;
+    }
+    if (byte_size >= 0x24) {
+        size_t string_end;
+
+        out_view->string_offset = words[7];
+        out_view->string_length = words[8];
+        if ((out_view->string_offset == 0) != (out_view->string_length == 0)) {
+            return false;
+        }
+        if (out_view->string_length != 0) {
+            string_end = (size_t)out_view->string_offset + (size_t)out_view->string_length;
+            if (out_view->string_offset < 0x24 || string_end > byte_size) {
+                return false;
+            }
+            if (!coruna_has_nul((const char *)(raw + out_view->string_offset), out_view->string_length)) {
+                return false;
+            }
+            out_view->payload_name = (const char *)(raw + out_view->string_offset);
+        }
     }
     return true;
 }
@@ -151,20 +176,12 @@ bool coruna90000_driver_object_validate(const struct coruna90000_driver_object *
         return false;
     }
 
-    if (object->abi_major != 2 || object->abi_minor < 2) {
-        return false;
-    }
-
     return coruna_callbacks_present_90000(object);
 }
 
 bool coruna90001_driver_object_validate(const struct coruna90001_driver_object *object)
 {
     if (object == NULL) {
-        return false;
-    }
-
-    if (object->abi_major != 2 || object->abi_minor < 2) {
         return false;
     }
 

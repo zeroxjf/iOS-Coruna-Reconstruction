@@ -6,7 +6,7 @@ Clean-room reconstruction of the **Coruna** iOS exploit chain. The browser-stage
 
 - **iOS 16 path:** `terrorbird` Stage1 on `16.2–16.5.1`, then the older `seedbell` branch on `16.3–16.5.1`
 - **iOS 17 path:** `cassowary` Stage1 on `16.6–17.2.1`, plus `seedbell_pre` and the newer `seedbell` branch on `17.0–17.2.1`
-- **Shared native path:** `Stage3_VariantB.js`, `bootstrap.dylib`, record `0x80000`, record `0x90000`, record `0x90001`, and `TweakLoader` are common loader/native-chain material
+- **Shared native path in the notes:** the documented chain includes `Stage3_VariantB.js`, `bootstrap.dylib`, record `0x80000`, record `0x90000`, record `0x90001`, and `TweakLoader`; this standalone repo discusses those artifacts but does not ship most of them
 - **Current implementation gap:** the least-finished part is still the per-version native `0x90000` logic, especially on newer firmware
 
 ## Chain Overview
@@ -64,9 +64,9 @@ Clean-room reconstruction of the **Coruna** iOS exploit chain. The browser-stage
 
 ## Disclaimer
 
-This repository was assembled primarily with Codex GPT-5.4 xhigh across multiple iterative passes — not a single one-shot generation. Each pass refined and cross-checked the previous output against disassembly, decompilation, and known chain behavior, but the results are still AI-assisted inferences. There may be mistakes, omissions, or misinterpretations. Verify offsets, structures, control flow, primitives, and behavioral conclusions against the original binaries, firmware images, and live test devices before relying on any part of it.
+This repository was assembled primarily with Codex GPT-5.4 xhigh across multiple iterative passes — not a single one-shot generation. Each pass refined and cross-checked the previous output against disassembly, decompilation, the original live mirror, the internal exploit-chain writeup, and known chain behavior, but the results are still AI-assisted inferences. There may be mistakes, omissions, or misinterpretations. Verify offsets, structures, control flow, primitives, and behavioral conclusions against the original binaries, firmware images, and live test devices before relying on any part of it.
 
-This standalone repo is a distilled publication, not the original workspace. Some long-form notes cite the original `live-site/` mirror and an internal writeup as provenance; those inputs are not included here.
+This standalone repo is a distilled publication, not the original workspace. Some long-form notes cite the original `live-site/` mirror and an internal writeup as provenance; those private inputs were used during reconstruction but are intentionally not included here to avoid redistributing the original chain.
 
 ## Scope
 
@@ -76,7 +76,7 @@ Current status:
 
 - strong RE dossier for the chain shape and record formats
 - compile-checked clean-room contracts and loader-side helper code
-- supporting tooling for payload inspection and container rebuilds
+- supporting tooling for payload inspection and Stage3 output rebuilds
 - not yet a finished end-to-end clean exploit implementation
 
 ## Layout
@@ -92,7 +92,7 @@ Current status:
 - [`clean-room/include/coruna_stage_loader.h`](clean-room/include/coruna_stage_loader.h)
   - loader-side record-store and worker-pack contracts
 - [`tools/coruna_payload_tool.py`](tools/coruna_payload_tool.py)
-  - helper for payload/container inspection and rebuilds
+  - helper for payload/record inspection and Stage3 output rebuilds
 
 ## Verification
 
@@ -105,3 +105,5 @@ clang -std=c11 -Wall -Wextra -Werror -Iclean-room/include -fsyntax-only \
 
 python3 -m py_compile tools/coruna_payload_tool.py
 ```
+
+These checks catch syntax drift only. They do not validate reconstructed control flow, offsets, record layouts, or behavior against the original artifacts.
