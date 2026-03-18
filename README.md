@@ -23,7 +23,7 @@ The kit uses different exploit chains for different iOS sub-ranges — **no sing
 | **14.2 – 14.4** | `buffout` · CVE-2021-30952 | — | **Gap — Neutron patched, Photon starts 14.5** |
 | **13.0 – 14.1** | `buffout` · CVE-2021-30952 | Neutron · CVE-2020-27932 + Dynamo · CVE-2020-27950 | Both patched 14.2 |
 
-**Dead above iOS 17.3** (WebKit) / **17.4** (kernel). CVE associations from the [Google TAG report](https://cloud.google.com/blog/topics/threat-intelligence/coruna-powerful-ios-exploit-kit) and [Hacker News](https://thehackernews.com/2026/03/coruna-ios-exploit-kit-uses-23-exploits.html); Google TAG notes some may be revised. Target ranges reflect where the kit deploys each exploit (version-specific offsets), which may be narrower than the CVE's full vulnerable range.
+**Dead on iOS >= 17.3** (WebKit patched) / **>= 17.4** (kernel patched). CVE associations from the [Google TAG report](https://cloud.google.com/blog/topics/threat-intelligence/coruna-powerful-ios-exploit-kit) and [Hacker News](https://thehackernews.com/2026/03/coruna-ios-exploit-kit-uses-23-exploits.html); Google TAG notes some may be revised. Target ranges reflect where the kit deploys each exploit (version-specific offsets), which may be narrower than the CVE's full vulnerable range.
 
 ## Chain at a Glance
 
