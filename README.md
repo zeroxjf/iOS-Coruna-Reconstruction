@@ -9,7 +9,7 @@ The full Coruna kit ([documented by Google TAG](https://cloud.google.com/blog/to
 ### Exploit Chain Map
 
 <details>
-<summary><h4>Click to expand — per-version CVE/chain breakdown with dead zones</h4></summary>
+<summary>Click to expand — per-version CVE/chain breakdown with dead zones</summary>
 
 The kit uses different exploit chains for different iOS sub-ranges — **no single chain works across the entire 13.0–17.2.1 span**. A full chain needs a WebKit RCE + kernel exploit both unpatched. Codenames are from the kit's internal naming.
 
