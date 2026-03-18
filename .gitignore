@@ -26,3 +26,6 @@ live-site/
 *.nam
 *.til
 DOPAMINE_INTEGRATION.md
+integration/*DOPAMINE*.md
+integration/*dopamine*.json
+tools/dopamine_*.py

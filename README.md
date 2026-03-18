@@ -1612,6 +1612,29 @@ python3 -m py_compile tools/coruna_payload_tool.py
 6. Recreate `0x80000`, `0x90000`, and `0xF0000` as separately readable projects.
 7. Keep the visible `sbtweak.m` payload benign and explicit so the end state stays demonstrable.
 
+## Dopamine Integration Status (iOS 17.0.3 / 21A360)
+
+The Dopamine-side patchfinder contract for this target is now partially grounded with reproducible data:
+
+- Probe tool: `tools/dopamine_xpf_probe.py`
+- Probe output: `integration/ios17_0_3_dopamine_xpf_probe_21A360.json`
+- Gap matrix: `integration/IOS17_0_3_CORUNA_DOPAMINE_GAP_MATRIX.md`
+- Coverage on 21A360 kernelcache: `31 / 76` XPF keys resolved
+- Verified constants include:
+  - `staticBase = 0xfffffff027004000`
+  - `kernel_el = 1`
+  - `pointer_mask = 0xffff800000000000`
+  - `T1SZ_BOOT = 17`
+  - `ARM_TT_L1_INDEX_MASK = 0x00007ff000000000`
+- Verified symbol subset includes:
+  - `allproc`, `perfmon_dev_open`, `vn_kqfilter`, `cdevsw`,
+  - `kalloc_data_external`, `kfree_data_external`,
+  - `mach_kobj_count`, `developer_mode_enabled`
+- Remaining blocker symbols for the stock Dopamine boot-constants path:
+  - `gVirtBase`, `gPhysBase`, `gPhysSize`, `cpu_ttep`
+
+For Coruna-mode integration, those unresolved symbols imply the `jbinfo_initialize_boot_constants`/translation path must be gated until those fields are sourced from Coruna-native state export or direct IDA confirmation.
+
 
 ## Current Secondary Questions
 
@@ -1621,7 +1644,7 @@ Remaining lower-priority unknowns:
 
 - records `0x10000`, `0x30000`, `0x40000` are now confirmed as configuration-dependent and absent from `manifest.json`. Their runtime origin is still untraced.
 - `_startx` and `_starti` are additional dispatch targets whose handling is path-specific. When their backing records exist, the `0x80000` image loads and calls them; when absent, the resulting errors are handled by the surrounding call sites rather than by a single universal “optional module” path.
-- the `platform_module.js` version offset table maps specific iOS builds to internal offset keys, but the mapping between those keys and the native chain's kernel-version thresholds has not been cross-referenced
+- `platform_module.js` offset-key thresholds are now cross-referenced at the selector level (`170000`/`170100`/`170200`/`170300` in `versionOffsetTable`, plus `et()` overrides in Stage1 cassowary). Remaining work is key-by-key mapping from those opaque JS keys into native `sub_B8F8` field semantics for each 17.x build.
 - the three state-inheritance trigger functions (`sub_9DC8`/`sub_13C5C`/`sub_1393C`) are now fully traced — they inherit pre-published kernel state via voucher recipes and shared memory
 - the initial kernel address leak mechanism is now traced: `sub_72EC` uses the IOSurface `kIOSurfaceMemoryRegion` property to control backing store allocation, then scans kernel memory through the surface's userclient interface
 - the vulnerability class is now identified: IOSurface/IOGPU info leak → pmap permission escalation. `sub_F1F8` is a verification scanner (not the corruption), `sub_F07C` validates IOKit heap structures, and the actual pmap writes happen in the `sub_8A48` main body after the target IOSurface kernel object is located
