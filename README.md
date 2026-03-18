@@ -55,7 +55,7 @@ index.html ─── fingerprint device, select stages
 | Record contracts | 14 record IDs mapped including 3 runtime-synthesized (`0x10000`, `0x30000`, `0x40000`) |
 | Clean-room C contracts | Compile-checked headers and validation helpers |
 
-**Remaining gaps:** the exact vulnerability trigger inside each of the three kernel primitive paths (`sub_9DC8`/`sub_13C5C`/`sub_1393C`), and the runtime origin of records `0x10000`/`0x30000`/`0x40000`.
+**Remaining gap:** the specific IOSurface kernel object corruption technique inside `sub_8A48` — how the initial kernel address leak is obtained before the pointer walk begins. The three "trigger" functions (`sub_9DC8`/`sub_13C5C`/`sub_1393C`) are now confirmed as state-inheritance/caching, not the vulnerability itself. Records `0x10000`/`0x30000`/`0x40000` are confirmed optional.
 
 ## Layout
 

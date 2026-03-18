@@ -365,7 +365,7 @@ Additionally, the `0x80000` orchestrator internally references at least three re
 - `0x30000`: loaded image from which `_starti` is resolved (in the `sub_BA2C` multi-path activation).
 - `0x40000`: data blob passed as input to `_starti`.
 
-These records are not present in `payloads/manifest.json`. They are either synthesized at runtime by bootstrap/`_startl`, composed from other record data, or injected through an unrecovered path. Their absence from the manifest means they are not fetched from the JS side via `buildContainer()`.
+These records are not present in `payloads/manifest.json` and are not fetched from the JS side via `buildContainer()`. Resolution of `_startx` (from `0x10000`) and `_starti` (from `0x30000`) is **optional** — the orchestrator handles lookup failures gracefully and continues without them. They likely exist only in specific deployment configurations or are written by stages not present in all payload sets. When `0x30000` is absent, `sub_BA2C` returns error `708614`, which the caller handles as a non-fatal condition.
 
 ## `0x50000` And `0x90001`: Auxiliary Bootstrap Helper Path
 
@@ -789,9 +789,38 @@ The exploit branches on `hw.cpufamily`:
 
 On newer kernels (`state + 344 > 0x1F530F027FFFFF`), also reads `hw.model` via sysctl and checks `model[0] & 0xDF == 0x4A` (uppercase 'J' → iPhone model prefix).
 
-#### 4. Kernel primitive acquisition — three version-dependent paths
+#### 4. State inheritance — fast path before the exploit
 
-This is the core exploit. The function `sub_8A48` (e9f89858 variant) implements three separate kernel primitive techniques selected by kernel address range:
+Before running the full exploit, `sub_31BA0` first attempts to **inherit** a previously-published kernel primitive from shared memory. Three version-dependent recovery functions are tried:
+
+**`sub_9DC8` (newest, `state+344 > 0x2257FFFFFFFFFFFF`):**
+- Calls `sub_137E4(state, 17, 0x4000, &ptr)` which resolves a `host_create_mach_voucher` recipe keyed at `0x1122334455667788 + 17` (or reads from a mailbox slot table on newer builds), obtains a memory entry port, and `vm_map`s 4 pages of shared memory.
+- Scans the mapped region for a dword value `8` at page-aligned boundaries — this is a magic marker left by a prior run.
+- When found, copies 0x6D0 bytes of pre-built exploit state from the template, clears stale fields, and finishes IOSurface setup via the same `sub_A048` → `sub_A2D0` → `sub_A4A8` → `sub_A508` sequence used by the full exploit.
+- Maps a second shared region via `sub_137E4(state, 18, ...)` for additional state.
+
+**`sub_13C5C` (middle, `state+344 > 0x1F530F027FFFFF` with state bits):**
+- Resolves 3 Mach ports via voucher mailbox recipes keyed from `0x3122334455667788 + offset` (on older builds) or from a slot table (on newer builds).
+- On builds > 8791: validates via `IOConnectCallMethod(connection[1], 0x3E7, ...)` (selector 999).
+- Maps `connection[0]` and `object` into memory. Reads pre-computed kernel state from the mapped page:
+  - `+0x00`: kernel object address → `state + 6608`
+  - `+0x08`: kernel region → `state + 240`
+  - `+0x10`: index (uint32), `+0x14`: value (uint32) — used to correlate IOSurface backing
+- Stores the IOSurface connect port and mapped window at `state + 232/248/256`.
+
+**`sub_1393C` (oldest, below middle threshold):**
+- Resolves 3–4 voucher recipes starting from `0x1122334455667788`.
+- Converts voucher ports to file descriptors via `fileport_makefd()`.
+- The kernel addresses are **smuggled through `fstat` metadata**: `st_atimespec.tv_sec` contains the kernel object address, `st_atimespec.tv_nsec` encodes the kernel base/slide via bit manipulation (`>> 40` × page_size → `state + 6624`).
+- Stores fds at `state + 6448/6452/6456/6464` and the kernel object at `state + 6608`.
+
+If any of these inherit successfully (`result == 1`), the full exploit is skipped. If all fail, execution falls through to the actual vulnerability trigger in `sub_8A48`.
+
+The **terminal helper families** (documented earlier as `sub_1DBD8`, `sub_1DE68`, `sub_1E154`, `sub_C060`) are responsible for **publishing** the kernel state that these functions later inherit. They use the same voucher recipe keys and `fileport_makeport` to convert fds to Mach ports for cross-invocation sharing.
+
+#### 5. Kernel primitive acquisition — the actual exploit (`sub_8A48`)
+
+When state inheritance fails, `sub_8A48` runs the real IOSurface-based kernel exploit. It implements three separate techniques selected by kernel address range:
 
 **Path A — Newest kernels (`state+344 >= 0x1F530F02800000` with specific state bits, or `>= 0x2258000000000000`):**
 
@@ -839,7 +868,7 @@ Fd-pair only approach:
 
 All three paths retry up to 5 times on failure (error code 258054).
 
-#### 5. Kernel read/write primitives
+#### 6. Kernel read/write primitives
 
 `sub_1E238` (kread) and `sub_1E0B8` (kwrite) select the appropriate backend based on which primitive was acquired:
 
@@ -854,7 +883,7 @@ All three paths retry up to 5 times on failure (error code 258054).
 
 The write fallback also flushes via `mach_vm_machine_attribute(task, addr, 4, MATTR_VAL_CACHE_FLUSH)`.
 
-#### 6. Policy and entitlement patching
+#### 7. Policy and entitlement patching
 
 After the primitive is stable:
 
@@ -873,7 +902,7 @@ Baked entitlement plists for injection:
 - `<dict><key>com.apple.private.security.disk-device-access</key><true/></dict>`
 - `<dict><key>com.apple.private.diskimages.kext.user-client-access</key><true/><key>com.apple.private.security.disk-device-access</key><true/><key>com.apple.security.iokit-user-client-class</key><array><string>IOHDIXControllerUserClient</string></array></dict>`
 
-#### 7. Task and host escalation
+#### 8. Task and host escalation
 
 - Calls `sub_31350(state, mach_task_self_, 0, 0)` to re-apply task credentials
 - Obtains `host_priv` port via `sub_2F660` → `state + 6432`
@@ -881,7 +910,7 @@ Baked entitlement plists for injection:
 - Calls `sub_306F4(state, mach_task_self_)` for task-level operations
 - On older kernels: `sub_2F7A8` obtains an additional special port at `state + 6436`
 
-#### 8. Terminal publication
+#### 9. Terminal publication
 
 Three paths depending on kernel version:
 
@@ -1211,10 +1240,10 @@ The `0x50000`, `prefix32`, `0xA0000`, and optional module questions are substant
 
 Remaining lower-priority unknowns:
 
-- the runtime origin of records `0x10000`, `0x30000`, and `0x40000` — they are not in `manifest.json` and must be synthesized by bootstrap, `_startl`, or a record-store builder at runtime
-- the role of `_startx` (resolved from `0x10000`) and `_starti` (resolved from `0x30000`) — both are called in the orchestrator but the loaded images they come from have not been identified
-- the exact semantic of the `sub_BA2C` multi-path activation that calls `_starti` from 7 locations in the 0x80000 orchestrator
+- records `0x10000`, `0x30000`, `0x40000` are now confirmed as **optional** — the orchestrator handles their absence gracefully. Their runtime origin is still untraced, but their absence does not block the main chain.
+- `_startx` and `_starti` are optional dispatch targets. When their backing records exist, the orchestrator loads and calls them; when absent, execution continues normally. They likely exist only in certain deployment configurations.
 - the `platform_module.js` version offset table maps specific iOS builds to internal offset keys, but the mapping between those keys and the native chain's kernel-version thresholds has not been cross-referenced
+- the three state-inheritance trigger functions (`sub_9DC8`/`sub_13C5C`/`sub_1393C`) are now fully traced — they inherit pre-published kernel state via voucher recipes and shared memory. The actual vulnerability trigger remains in `sub_8A48` (IOSurface-based). The specific IOSurface kernel object corruption technique (how the initial kaddr leak is obtained before the pointer walk) is the narrowest remaining gap in the exploit chain.
 
 Resolved chain shape:
 
