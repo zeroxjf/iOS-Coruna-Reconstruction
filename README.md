@@ -1,5 +1,7 @@
 # iOS-Coruna-Reconstruction
 
+> **Disclaimer:** This repo was built iteratively with **Codex GPT-5.4 xhigh** and **Claude Opus 4.6 max**, cross-checked against IDA Pro decompilation, the original live mirror, and firmware artifacts. Not a single one-shot generation — each pass refined the previous output against disassembly and known chain behavior. There will be mistakes. Verify everything against the actual binaries before relying on it. The original exploit binaries, JS stages, and IPSW firmware are intentionally excluded to avoid redistributing the chain.
+
 Clean-room reconstruction of the **Coruna** iOS exploit chain (iOS 16.2 – 17.2.1), reverse-engineered from the live mirror using IDA Pro.
 
 Coruna is a full-chain browser-to-kernel exploit delivered via WebKit. It chains a JSC type-confusion, an `Intl.Segmenter`/BreakIterator PAC bypass, and a custom IOGPU/AGX + IOSurface kernel exploit into persistent code execution — then cleans up after itself.
@@ -78,8 +80,3 @@ clang -std=c11 -Wall -Wextra -Werror -Iclean-room/include -fsyntax-only \
 python3 -m py_compile tools/coruna_payload_tool.py
 ```
 
-## Disclaimer
-
-This repo was built iteratively with AI-assisted analysis (Codex, Claude) cross-checked against IDA decompilation, the original live mirror, and firmware artifacts. There will be mistakes. Verify everything against the actual binaries before relying on it.
-
-The original exploit binaries, JS stages, and IPSW firmware are intentionally excluded to avoid redistributing the chain.
