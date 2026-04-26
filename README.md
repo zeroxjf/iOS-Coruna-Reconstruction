@@ -4,7 +4,7 @@ Reverse-engineered reconstruction of the [**Coruna**](https://cloud.google.com/b
 
 Coruna combines multiple WebKit RCEs (type confusion, UAF, integer overflow, bounds check bypass), PAC bypasses, sandbox escapes, and kernel exploits to achieve persistent code execution on targeted iOS versions. Based on [Duy Tran](https://github.com/khanhduytran0)'s [coruna](https://github.com/khanhduytran0/coruna) repo (malware-stripped binaries), with the live-site mirror hosted by [34306](https://github.com/34306) and [Nick Chan](https://github.com/asdfugil).
 
-> **Disclaimer:** Built iteratively with **Codex GPT-5.3-codex xhigh**, **Codex GPT-5.4 xhigh**, and **Claude Opus 4.6 max**, cross-checked against IDA Pro decompilation, the original live mirror, and firmware artifacts. Each pass refined the previous output against disassembly and known chain behavior. There will be mistakes — verify against the actual binaries before relying on anything here. The original exploit binaries, JS stages, and IPSW firmware are intentionally excluded.
+> **Disclaimer:** Built iteratively with **Codex GPT-5.3-codex xhigh**, **Codex GPT-5.4 xhigh**, and **Claude Opus 4.6 max**, cross-checked against IDA Pro decompilation, the original live mirror, and firmware artifacts. Each pass refined the previous output against disassembly and known chain behavior. There will be mistakes — verify against the actual binaries before relying on anything here. This checkout includes recovered mirror artifacts under `live-site/`; IPSW firmware artifacts are intentionally excluded.
 
 ### Exploit Chain Map
 
@@ -15,9 +15,11 @@ The kit uses different exploit chains for different iOS sub-ranges — **no sing
 
 | iOS window | WebKit RCE | Kernel | Status |
 |---|---|---|---|
-| **17.0 – 17.2.1** | `cassowary` · CVE-2024-23222 | Sparrow · CVE-2024-23225 + Rocket · CVE-2024-23296 | WebKit fixed 17.3 |
-| **16.6 – 16.7.4** | `cassowary` · CVE-2024-23222 | Parallax · CVE-2023-41974 (16.6–16.7) then CVE-2024-23225/23296 (16.7.1+) | WebKit fixed 16.7.5 |
-| **16.7.5** | — | CVE-2024-23225 still open | **Dead — WebKit patched, no RCE** |
+| **17.1 – 17.2.1** | `cassowary` · CVE-2024-23222 | Sparrow · CVE-2024-23225 + Rocket · CVE-2024-23296 | WebKit fixed 17.3 |
+| **17.0.x** | `cassowary` · CVE-2024-23222 | Sparrow · CVE-2024-23225 plus earlier PPL bypass support as selected by payload metadata | WebKit fixed 17.3 |
+| **16.7.1 – 16.7.4** | `cassowary` · CVE-2024-23222 | Backported kernel chain, payload-selected; public mapping names Sparrow/Rocket fixes across 16.7.6/16.7.8 | WebKit fixed 16.7.5 |
+| **16.6 – 16.7.0** | `cassowary` · CVE-2024-23222 | Parallax · CVE-2023-41974 | WebKit fixed 16.7.5; Parallax fixed 17.0 |
+| **16.7.5** | — | CVE-2024-23225 still open on some branches | **Dead — WebKit patched, no RCE** |
 | **16.4 – 16.5.1** | `terrorbird` · CVE-2023-43000 | Parallax · CVE-2023-41974 | WebKit fixed 16.6 |
 | **16.2 – 16.3.1** | `terrorbird` · CVE-2023-43000 | CVE-2023-32434 + IronLoader · CVE-2023-32409 (sandbox escape) | IronLoader fixed 16.5 |
 | **15.6 – 16.1.2** | `bluebird` · CVE unconfirmed | Photon · CVE-2023-32434 (through 15.7.6) / Gallium · CVE-2023-38606 (fallback) | bluebird CVE not publicly mapped |
@@ -26,7 +28,7 @@ The kit uses different exploit chains for different iOS sub-ranges — **no sing
 | **14.2 – 14.4** | `buffout` · CVE-2021-30952 | — | **Gap — Neutron patched, Photon starts 14.5** |
 | **13.0 – 14.1** | `buffout` · CVE-2021-30952 | Neutron · CVE-2020-27932 + Dynamo · CVE-2020-27950 | Both patched 14.2 |
 
-**Dead on iOS >= 17.3** (WebKit patched) / **>= 17.4** (kernel patched). CVE associations from the [Google TAG report](https://cloud.google.com/blog/topics/threat-intelligence/coruna-powerful-ios-exploit-kit) and [Hacker News](https://thehackernews.com/2026/03/coruna-ios-exploit-kit-uses-23-exploits.html); Google TAG notes some may be revised. Target ranges reflect where the kit deploys each exploit (version-specific offsets), which may be narrower than the CVE's full vulnerable range.
+**Dead on iOS >= 17.3** for this full chain because the WebKit RCE is patched. Kernel-side fixes are split by primitive: Sparrow is listed as fixed in 17.4, while Rocket is listed as fixed in 17.5. CVE associations from the [Google TAG report](https://cloud.google.com/blog/topics/threat-intelligence/coruna-powerful-ios-exploit-kit) and [Hacker News](https://thehackernews.com/2026/03/coruna-ios-exploit-kit-uses-23-exploits.html); Google TAG notes some may be revised. Target ranges reflect where the kit deploys each exploit (version-specific offsets), which may be narrower than the CVE's full vulnerable range.
 
 </details>
 
@@ -76,10 +78,10 @@ index.html ─── fingerprint device, select stages
 | `0xA0000` cleanup | Fully decompiled — targets, helper functions, entry contract |
 | `0xF0000` TweakLoader | Exports, dyld bypass, embedded `__SBTweak` extraction, `next_stage_main` contract |
 | `prefix32` sideband | Traced to native consumption in `sub_6BA0` |
-| Record contracts | 14 record IDs mapped including 3 runtime-synthesized (`0x10000`, `0x30000`, `0x40000`) |
+| Record contracts | 16 record IDs mapped, including 3 runtime-synthesized (`0x10000`, `0x30000`, `0x40000`) and two legacy/support manifest IDs (`0xA0001`, `0xA0002`) |
 | Clean-room C contracts | Compile-checked headers and validation helpers |
 
-**Vulnerability class identified:** IOSurface/IOGPU info leak → pmap permission escalation (PPL bypass). No classic memory corruption — the primitive is built from IOKit external method info disclosure, controlled surface memory mapping, and pmap permission flag writes on existing kernel objects.
+**Vulnerability class identified for the inspected modern `0x90000` path:** IOSurface/IOGPU info leak → pmap permission escalation (PPL bypass). In the 17.0.3-oriented path reviewed here, the primitive appears to be built from IOKit external method information disclosure, controlled surface memory mapping, and pmap permission flag writes on existing kernel objects. Do not generalize that label to every Coruna kernel/PPL primitive without checking the selected payload set.
 
 
 ---
@@ -94,7 +96,7 @@ Based on IDA Pro analysis of:
 - `EXPLOIT_CHAIN_WRITEUP.md` (internal provenance)
 - 17.0.3 IPSW-derived dyld and XNU artifacts
 
-These `live-site/*` references are provenance inputs from the private research mirror; the publication keeps only clean-room outputs and documentation.
+These `live-site/*` references are provenance inputs from the private research mirror. They are present in this local checkout for verification but remain ignored for publication; the published repo keeps only clean-room outputs and documentation.
 
 ## End-to-End Shape
 
@@ -258,6 +260,8 @@ struct ContainerEntry {
 - `0x80000`
 - `0x90000`
 - `0x90001`
+- `0xA0000`
+- `0xA0001` / `0xA0002` in older/support payload sets
 - `0xF0000`
 
 
@@ -466,6 +470,8 @@ struct ContainerEntry {
 };
 ```
 
+The `size` written into the rebuilt table is the actual byte count fetched by Stage3, not the advisory `size` from `payloads/manifest.json`. This matters for the live `0xF0000` rewrite and for small selector/mode records where the trimmed mirror preserves extra trailing bytes.
+
 Important anchors:
 
 - `fetchBin()`: `Stage3_VariantB.js:1151`
@@ -603,6 +609,11 @@ The stable record IDs in the modern payload sets are:
 - `0x90001`
 - `0xA0000`
 - `0xF0000`
+
+Additional manifest IDs observed in older/support payload sets:
+
+- `0xA0001`
+- `0xA0002`
 
 The filename is secondary after Stage3 rebuilds the container. `f1` is the real contract.
 
@@ -1225,15 +1236,15 @@ All three paths retry up to 5 times on failure (error code 258054).
 
 ##### Vulnerability class
 
-The exploit is best modeled as a **multi-stage IOSurface/IOGPU information disclosure → pmap permission escalation chain**, not a single classic memory corruption bug. The concrete reads, writes, and object walks below are **Verified**; the overall vulnerability-class label is **Inferred** from those mechanics:
+The inspected modern path is best modeled as a **multi-stage IOSurface/IOGPU information disclosure → pmap permission escalation chain**. The concrete reads, writes, and object walks below are **Verified**; the overall vulnerability-class label is **Inferred** from those mechanics:
 
 1. **KASLR defeat**: IOGPU external method selectors (`0x20AE000xx`) and IOSurface selectors (`0x20000068x`/`0x2000007Ex`) expose kernel address components (page indices, virtual address fragments) from GPU firmware metadata and surface allocation internals.
 2. **Kernel heap read**: The IOSurface userclient's memory-mapped backing region, combined with controlled `kIOSurfaceMemoryRegion` allocation, provides a window into kernel heap memory that the exploit uses to scan for IOKit object metadata (`0xFEEBDAED` markers, "math" structural signatures).
 3. **IOSurface object identification**: The exploit locates a specific IOSurface kernel object by scanning at the version-dependent allocation stride (160–296 bytes) and matching the 32-byte header pattern. The "math" parse extracts the object's relationship to the pmap hierarchy.
 4. **pmap permission modification**: The final writes target the IOSurface's pmap-related structure fields — `pmap_ptr + 32` (1-byte enable) and `pmap_ptr + 116` (set `0x1000` bit in permission flags). This modifies page table protections to grant the userspace process a direct read/write mapping into kernel memory via a subsequent `mach_make_memory_entry` + `vm_map`.
-5. **No classic corruption**: There is no use-after-free, heap overflow, or type confusion. The primitive is built entirely from information disclosure through IOKit external methods, controlled memory mapping, and permission flag manipulation on existing kernel objects.
+5. **Path-local model**: In this recovered path, the primitive is built from information disclosure through IOKit external methods, controlled memory mapping, and permission flag manipulation on existing kernel objects. Other payload sets may exercise different kernel/PPL primitives.
 
-The vulnerability class is best described as a **PPL bypass via IOSurface/IOGPU info leak + pmap permission escalation**. That label is **Inferred** from the recovered mechanics rather than stated explicitly by the binary.
+For this path, the vulnerability class is best described as a **PPL bypass via IOSurface/IOGPU info leak + pmap permission escalation**. That label is **Inferred** from the recovered mechanics rather than stated explicitly by the binary.
 
 #### 6. Kernel read/write primitives
 

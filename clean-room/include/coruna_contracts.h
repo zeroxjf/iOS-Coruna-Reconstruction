@@ -37,6 +37,8 @@ enum coruna_record_id {
     CORUNA_RECORD_90000 = 0x90000,
     CORUNA_RECORD_90001 = 0x90001,
     CORUNA_RECORD_A0000 = 0xA0000,  /* cleanup module; _startsc */
+    CORUNA_RECORD_A0001 = 0xA0001,
+    CORUNA_RECORD_A0002 = 0xA0002,
     CORUNA_RECORD_F0000 = 0xF0000,
 };
 
